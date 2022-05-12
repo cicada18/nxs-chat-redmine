@@ -36,6 +36,17 @@ module Redmine
         unless issue.project.nil?
           json[:project] = {:id => issue.project_id, :name => issue.project.name}
 
+
+
+          unless issue.project.custom_field_values.nil?
+            issue.project.custom_field_values.each do |custom_value|
+              if custom_value.value.is_a?(Array)
+              else
+                json[:project]["#{custom_value.custom_field.name}"] = custom_value.value
+              end
+            end
+          end
+
           unless issue.project.members.nil?
             json[:project][:members] = []
             issue.project.members.each do |member|
@@ -164,8 +175,10 @@ module Redmine
       #
       # Arguments should support converting to JSON object
       def self.send_event(action: nil, data: nil)
+        notifications_endpoint_url = data[:issue][:project]["notifications_endpoint"]?data[:issue][:project]["notifications_endpoint"]:Setting.plugin_nxs_chat['notifications_endpoint']
+
         begin
-          uri = URI.parse(Setting.plugin_nxs_chat['notifications_endpoint'])
+          uri = URI.parse(notifications_endpoint_url)
         rescue => e
           # Plugin is not configured properly
           logger.error "Parsing URI for notifications failed:\n"\
@@ -183,29 +196,28 @@ module Redmine
           'Content-Type' => 'application/json'
         }
 
-        # For dingding msgtype
-        # add by baili.hzw@dtyunxi.com 
         markdown = {}
         markdown[:title] = action
-        markdown[:text] = "issue：[##{data[:issue][:id]}](http://***/issues/#{data[:issue][:id]})\n> \n> "\
+        markdown[:text] = "issue：[##{data[:issue][:id]}](http://39.101.181.32:13000/issues/#{data[:issue][:id]})\n> \n> "\
                       "项目: #{data[:issue][:project][:name]}\n> \n> "\
-                      "跟踪: #{data[:issue][:tracker][:name]}\n> \n> "\
-                      "主题：#{data[:issue][:subject]}\n> "\
+                      "类型: #{data[:issue][:tracker][:name]}\n> \n> "\
+                      "主题：#{data[:issue][:subject]}\n> \n>"\
                       "状态: #{data[:issue][:status][:name]}\n> \n> "\
                       "优先级: #{data[:issue][:priority][:name]}\n> \n> "\
-                      "指派给: #{data[:issue][:assigned_to][:name]}\n> \n> "\
+                      "指派给: #{data[:issue][:assigned_to]?data[:issue][:assigned_to][:name]:''}\n> \n> "\
                       "创建日期: #{data[:issue][:created_on]}\n> \n> "\
                       "更新日期:#{data[:issue][:updated_on]}\n> \n> "\
                       "### 描述\n> \n> "\
                       "    #{data[:description]}\n"
         json_data = JSON.generate({ :msgtype => "markdown", :markdown => markdown })
-        # json_data = JSON.generate({ :action => action, :data => data })
+        #json_data = JSON.generate({ :action => action, :data => data })
 
         # Create the HTTP objects
         http = Net::HTTP.new(uri.host, uri.port)
         if uri.scheme == 'https'
           http.use_ssl = true
-          http.verify_mode = OpenSSL::SSL::VERIFY_NONE if Setting.plugin_nxs_chat['notifications_endpoint_ssl_verify_none']
+          http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+                #if Setting.plugin_nxs_chat['notifications_endpoint_ssl_verify_none']
         end
         request = Net::HTTP::Post.new(uri.request_uri, header)
         request.body = json_data
@@ -228,8 +240,8 @@ module Redmine
         else
           logger.info "Notification has been sent successfully:\n"\
                       "  URI: #{uri}\n"\
-                      "  URI: #{json_data}\n"\
-                      "  Response code: #{response.code}" if logger
+                      "  Request: #{request.body}\n"\
+                      "  Response: #{response.code}" if logger
         end
       end
 
