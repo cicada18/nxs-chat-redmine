@@ -180,9 +180,26 @@ module Redmine
 
         # Prepare the data
         header = {
-          'Content-Type' => 'text/json'
+          'Content-Type' => 'application/json'
         }
-        json_data = JSON.generate({ :action => action, :data => data })
+
+        # For dingding msgtype
+        # add by baili.hzw@dtyunxi.com 
+        markdown = {}
+        markdown[:title] = action
+        markdown[:text] = "issue：[##{data[:issue][:id]}](http://***/issues/#{data[:issue][:id]})\n> \n> "\
+                      "项目: #{data[:issue][:project][:name]}\n> \n> "\
+                      "跟踪: #{data[:issue][:tracker][:name]}\n> \n> "\
+                      "主题：#{data[:issue][:subject]}\n> "\
+                      "状态: #{data[:issue][:status][:name]}\n> \n> "\
+                      "优先级: #{data[:issue][:priority][:name]}\n> \n> "\
+                      "指派给: #{data[:issue][:assigned_to][:name]}\n> \n> "\
+                      "创建日期: #{data[:issue][:created_on]}\n> \n> "\
+                      "更新日期:#{data[:issue][:updated_on]}\n> \n> "\
+                      "### 描述\n> \n> "\
+                      "    #{data[:description]}\n"
+        json_data = JSON.generate({ :msgtype => "markdown", :markdown => markdown })
+        # json_data = JSON.generate({ :action => action, :data => data })
 
         # Create the HTTP objects
         http = Net::HTTP.new(uri.host, uri.port)
@@ -211,6 +228,7 @@ module Redmine
         else
           logger.info "Notification has been sent successfully:\n"\
                       "  URI: #{uri}\n"\
+                      "  URI: #{json_data}\n"\
                       "  Response code: #{response.code}" if logger
         end
       end
